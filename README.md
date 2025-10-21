@@ -113,7 +113,7 @@ Open VS Code settings (Ctrl+,) and search for "MCP" or edit your `settings.json`
 }
 ```
 
-Replace `C:\\ABSOLUTE\\PATH\\TO\\WindowsSandboxMcp` with your actual project path.
+You must use an absolute path. You can check the absolute path of the project using the `pwd` command in PowerShell.
 
 #### 4. Reload VS Code
 
