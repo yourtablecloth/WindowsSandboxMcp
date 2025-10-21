@@ -1,9 +1,58 @@
+using System.Diagnostics;
 using System.Management;
+using System.Xml.Linq;
 
 public static class WindowsSandbox
 {
     public static bool CanUseSandboxCli()
         => WindowsSandboxCliRaw.IsSupportedOSForSandboxCli();
+
+    public static async Task<string> StartSandboxViaWsbFileAsync(WindowsSandboxConfiguration config)
+    {
+        try
+        {
+            // Generate XML document with proper declaration
+            var xDocument = new XDocument(
+                new XDeclaration("1.0", "utf-8", null),
+                config.ToXmlElement()
+            );
+
+            // Create temporary WSB file
+            var tempWsbPath = Path.Combine(Path.GetTempPath(), $"sandbox_{Guid.NewGuid():N}.wsb");
+
+            // Save XML to WSB file
+            await using (var fileStream = new FileStream(tempWsbPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            await using (var streamWriter = new StreamWriter(fileStream, System.Text.Encoding.UTF8))
+            {
+                await streamWriter.WriteAsync(xDocument.ToString());
+            }
+
+            // Launch WSB file using shell execution
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = tempWsbPath,
+                UseShellExecute = true,
+                Verb = "open"
+            };
+
+            var process = Process.Start(processStartInfo);
+
+            if (process == null)
+            {
+                // Clean up temp file if process failed to start
+                try { File.Delete(tempWsbPath); } catch { }
+                return "Failed to start sandbox via WSB file.";
+            }
+
+            // Note: The WSB file will be automatically cleaned up by the temp folder cleanup mechanism
+            // We don't delete it immediately as Windows Sandbox might still be reading it
+            return $"Sandbox started successfully via WSB file. Note: Advanced features (execute commands, network info, etc.) are not available without Windows Sandbox CLI.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error starting sandbox via WSB file: {ex.Message}";
+        }
+    }
 
     public static async Task<string?> StartSandboxAsync(WindowsSandboxConfiguration? config = default, CancellationToken cancellationToken = default)
     {

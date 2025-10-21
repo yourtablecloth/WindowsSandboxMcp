@@ -18,7 +18,8 @@ public sealed class WindowsSandboxTools
         [Description("Whether to enable printer redirection")] bool? enablePrinterRedirection = null,
         [Description("Whether to enable clipboard redirection")] bool? enableClipboardRedirection = null,
         [Description("Memory size in MB")] int? memoryInMB = null,
-        [Description("Command to execute on logon")] string? logonCommand = null)
+        [Description("Command to execute on logon")] string? logonCommand = null,
+        [Description("Comma-separated list of host folder paths to map to the sandbox. Example: C:\\Temp,D:\\Documents")] string? mappedFolders = null)
     {
         var config = new WindowsSandboxConfiguration
         {
@@ -33,10 +34,28 @@ public sealed class WindowsSandboxTools
             LogonCommand = logonCommand
         };
 
+        // Parse mapped folders from comma-separated string
+        if (!string.IsNullOrWhiteSpace(mappedFolders))
+        {
+            var folderPaths = mappedFolders.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var folderPath in folderPaths)
+            {
+                if (!string.IsNullOrWhiteSpace(folderPath))
+                {
+                    config.MappedFolders.Add(new MappedFolderConfiguration
+                    {
+                        HostFolderPath = folderPath,
+                        SandboxFolderAbsolutePath = null,
+                        ReadOnly = null
+                    });
+                }
+            }
+        }
+
         if (!WindowsSandbox.CanUseSandboxCli())
         {
             // Fallback: Generate temporary WSB file and launch it via Process.Start
-            return await StartSandboxViaWsbFileAsync(config);
+            return await WindowsSandbox.StartSandboxViaWsbFileAsync(config);
         }
 
         // Check if a sandbox is already running
@@ -53,66 +72,6 @@ public sealed class WindowsSandboxTools
         await WindowsSandbox.WaitUntilSandboxReadyAsync(sandboxId, TimeSpan.FromSeconds(1d));
 
         return "Sandbox started successfully.";
-    }
-
-    private static async Task<string> StartSandboxViaWsbFileAsync(WindowsSandboxConfiguration config)
-    {
-        try
-        {
-            // Generate XML document with proper declaration
-            var xDocument = new XDocument(
-                new XDeclaration("1.0", "utf-8", null),
-                config.ToXmlElement()
-            );
-
-            // Create temporary WSB file
-            var tempWsbPath = Path.Combine(Path.GetTempPath(), $"sandbox_{Guid.NewGuid():N}.wsb");
-
-            // Save XML to WSB file
-            await using (var fileStream = new FileStream(tempWsbPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            await using (var streamWriter = new StreamWriter(fileStream, System.Text.Encoding.UTF8))
-            {
-                await streamWriter.WriteAsync(xDocument.ToString());
-            }
-
-            // Launch WSB file using shell execution
-            var processStartInfo = new ProcessStartInfo
-            {
-                FileName = tempWsbPath,
-                UseShellExecute = true,
-                Verb = "open"
-            };
-
-            var process = Process.Start(processStartInfo);
-
-            if (process == null)
-            {
-                // Clean up temp file if process failed to start
-                TryDeleteFile(tempWsbPath);
-                return "Failed to start sandbox via WSB file.";
-            }
-
-            // Note: The WSB file will be automatically cleaned up by the temp folder cleanup mechanism
-            // We don't delete it immediately as Windows Sandbox might still be reading it
-            return $"Sandbox started successfully via WSB file. Note: Advanced features (execute commands, network info, etc.) are not available without Windows Sandbox CLI.";
-        }
-        catch (Exception ex)
-        {
-            return $"Error starting sandbox via WSB file: {ex.Message}";
-        }
-    }
-
-    private static void TryDeleteFile(string filePath)
-    {
-        try
-        {
-            if (File.Exists(filePath))
-                File.Delete(filePath);
-        }
-        catch
-        {
-            // Silently ignore deletion errors
-        }
     }
 
     [McpServerTool, Description("Executes a command in the running Sandbox.")]
