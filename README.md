@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that enables control of Windows Sandbox through MCP.
 
+[![Demo](https://img.youtube.com/vi/2cIWJsQDlSM/maxresdefault.jpg)](https://www.youtube.com/watch?v=2cIWJsQDlSM)
+
 > **⚠️ EXPERIMENTAL PROJECT**
 >
 > This project is currently in experimental stage. It may contain bugs and limitations. We welcome feedback and testing, but **use in production environments is not recommended** at this time.
