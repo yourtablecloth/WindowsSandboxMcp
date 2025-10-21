@@ -52,8 +52,7 @@ Configure it as follows:
       "args": [
         "run",
         "--project",
-        "C:\\ABSOLUTE\\PATH\\TO\\WindowsSandboxMcp\\src\\WindowsSandboxMcp",
-        "--no-build"
+        "D:\\projects\\WindowsSandboxMcp\\src\\WindowsSandboxMcp\\WindowsSandboxMcp.csproj"
       ]
     }
   }
@@ -104,15 +103,11 @@ Open VS Code settings (Ctrl+,) and search for "MCP" or edit your `settings.json`
 
 ```json
 {
-  "mcp.servers": {
+  "servers": {
     "windows-sandbox": {
+      "type": "stdio",
       "command": "dotnet",
-      "args": [
-        "run",
-        "--project",
-        "C:\\ABSOLUTE\\PATH\\TO\\WindowsSandboxMcp\\src\\WindowsSandboxMcp",
-        "--no-build"
-      ]
+      "args": ["run", "--project", "D:\\projects\\WindowsSandboxMcp\\src\\WindowsSandboxMcp\\WindowsSandboxMcp.csproj"]
     }
   }
 }
@@ -155,6 +150,52 @@ You can ask GitHub Copilot questions like:
 - "Add C:\Temp as a shared folder in the sandbox"
 
 ## Troubleshooting
+
+### General
+
+#### If `dotnet run --project` doesn't work or multiple clients can't connect simultaneously
+
+The `dotnet run --project` approach may have limitations when multiple MCP clients try to connect at the same time, as each client may trigger a separate build process.
+
+**Solution:** Build and use the executable directly
+
+1. Build the project in Release mode:
+
+   ```bash
+   dotnet publish -c Release -o ./publish
+   ```
+
+2. Update your MCP client configuration to use the executable directly:
+
+   **For Claude Desktop** (`claude_desktop_config.json`):
+
+   ```json
+   {
+     "mcpServers": {
+       "windows-sandbox": {
+         "command": "D:\\projects\\WindowsSandboxMcp\\publish\\WindowsSandboxMcp.exe"
+       }
+     }
+   }
+   ```
+
+   **For VS Code** (`settings.json`):
+
+   ```json
+   {
+     "mcp.servers": {
+       "windows-sandbox": {
+         "command": "D:\\projects\\WindowsSandboxMcp\\publish\\WindowsSandboxMcp.exe"
+       }
+     }
+   }
+   ```
+
+   Replace `D:\\projects\\WindowsSandboxMcp` with your actual project path.
+
+3. Restart your MCP client
+
+This approach allows multiple clients to use the same compiled executable without conflicts.
 
 ### Claude Desktop
 
