@@ -7,18 +7,23 @@ internal static class WindowsSandboxCliRaw
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Microsoft", "WindowsApps", "wsb.exe");
 
-    public static string EnsureSandboxCliAvailability()
+    public static bool IsSupportedOSForSandboxCli()
     {
         var ignoreOSVersion = string.Equals(
             bool.TrueString,
             Environment.GetEnvironmentVariable("WINSANDMCP_IGNORE_OS_VERSION_CHECKS"),
             StringComparison.OrdinalIgnoreCase);
 
-        if (ignoreOSVersion == false)
-        {
-            if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100))
-                throw new NotSupportedException("This utility requires Windows 11 24H2 or later version.");
-        }
+        if (ignoreOSVersion)
+            return true;
+
+        return OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100);
+    }
+
+    public static string EnsureSandboxCliAvailability()
+    {
+        if (!IsSupportedOSForSandboxCli())
+            throw new NotSupportedException("This utility requires Windows 11 24H2 or later version.");
 
         var wsbPath = InferSandboxCliPath();
 

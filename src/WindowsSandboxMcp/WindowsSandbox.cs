@@ -2,6 +2,9 @@ using System.Management;
 
 public static class WindowsSandbox
 {
+    public static bool CanUseSandboxCli()
+        => WindowsSandboxCliRaw.IsSupportedOSForSandboxCli();
+
     public static async Task<string?> StartSandboxAsync(WindowsSandboxConfiguration? config = default, CancellationToken cancellationToken = default)
     {
         var doc = await WindowsSandboxCliRaw.StartSandboxRawAsync(config, cancellationToken).ConfigureAwait(false);

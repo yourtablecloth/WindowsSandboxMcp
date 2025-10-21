@@ -1,5 +1,7 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Xml.Linq;
 
 namespace WindowsSandboxMcp.Tools;
 
@@ -18,11 +20,6 @@ public sealed class WindowsSandboxTools
         [Description("Memory size in MB")] int? memoryInMB = null,
         [Description("Command to execute on logon")] string? logonCommand = null)
     {
-        // Check if a sandbox is already running
-        var existingSandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
-        if (!string.IsNullOrEmpty(existingSandboxId))
-            return "A sandbox is already running. Please stop the existing sandbox before starting a new one.";
-
         var config = new WindowsSandboxConfiguration
         {
             EnableVGpu = enableVGpu,
@@ -36,6 +33,17 @@ public sealed class WindowsSandboxTools
             LogonCommand = logonCommand
         };
 
+        if (!WindowsSandbox.CanUseSandboxCli())
+        {
+            // Fallback: Generate temporary WSB file and launch it via Process.Start
+            return await StartSandboxViaWsbFileAsync(config);
+        }
+
+        // Check if a sandbox is already running
+        var existingSandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        if (!string.IsNullOrEmpty(existingSandboxId))
+            return "A sandbox is already running. Please stop the existing sandbox before starting a new one.";
+
         var sandboxId = await WindowsSandbox.StartSandboxAsync(config);
 
         if (string.IsNullOrEmpty(sandboxId))
@@ -47,6 +55,66 @@ public sealed class WindowsSandboxTools
         return "Sandbox started successfully.";
     }
 
+    private static async Task<string> StartSandboxViaWsbFileAsync(WindowsSandboxConfiguration config)
+    {
+        try
+        {
+            // Generate XML document with proper declaration
+            var xDocument = new XDocument(
+                new XDeclaration("1.0", "utf-8", null),
+                config.ToXmlElement()
+            );
+
+            // Create temporary WSB file
+            var tempWsbPath = Path.Combine(Path.GetTempPath(), $"sandbox_{Guid.NewGuid():N}.wsb");
+
+            // Save XML to WSB file
+            await using (var fileStream = new FileStream(tempWsbPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            await using (var streamWriter = new StreamWriter(fileStream, System.Text.Encoding.UTF8))
+            {
+                await streamWriter.WriteAsync(xDocument.ToString());
+            }
+
+            // Launch WSB file using shell execution
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = tempWsbPath,
+                UseShellExecute = true,
+                Verb = "open"
+            };
+
+            var process = Process.Start(processStartInfo);
+
+            if (process == null)
+            {
+                // Clean up temp file if process failed to start
+                TryDeleteFile(tempWsbPath);
+                return "Failed to start sandbox via WSB file.";
+            }
+
+            // Note: The WSB file will be automatically cleaned up by the temp folder cleanup mechanism
+            // We don't delete it immediately as Windows Sandbox might still be reading it
+            return $"Sandbox started successfully via WSB file. Note: Advanced features (execute commands, network info, etc.) are not available without Windows Sandbox CLI.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error starting sandbox via WSB file: {ex.Message}";
+        }
+    }
+
+    private static void TryDeleteFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+        catch
+        {
+            // Silently ignore deletion errors
+        }
+    }
+
     [McpServerTool, Description("Executes a command in the running Sandbox.")]
     public async Task<string> ExecuteInSandbox(
         [Description("Command to execute")] string command,
@@ -55,6 +123,9 @@ public sealed class WindowsSandboxTools
     {
         try
         {
+            if (!WindowsSandbox.CanUseSandboxCli())
+                return "Windows Sandbox CLI is not available on this system.";
+
             var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
             if (string.IsNullOrEmpty(sandboxId))
                 return "No running sandbox found. Please start a sandbox first.";
@@ -82,6 +153,9 @@ public sealed class WindowsSandboxTools
     [McpServerTool, Description("Stops the running Sandbox.")]
     public async Task<string> StopSandbox()
     {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return "Windows Sandbox CLI is not available on this system.";
+
         var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found.";
@@ -96,6 +170,9 @@ public sealed class WindowsSandboxTools
         [Description("Absolute path in Sandbox")] string? sandboxAbsolutePath = null,
         [Description("Whether to allow write access")] bool? allowWrite = null)
     {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return "Windows Sandbox CLI is not available on this system.";
+
         var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found. Please start a sandbox first.";
@@ -107,6 +184,9 @@ public sealed class WindowsSandboxTools
     [McpServerTool, Description("Opens a window that accesses the currently running Windows Sandbox session.")]
     public async Task<string> OpenSandboxRemoteSessionWindowAsync()
     {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return "Windows Sandbox CLI is not available on this system.";
+
         var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found. Please start a sandbox first.";
@@ -118,6 +198,9 @@ public sealed class WindowsSandboxTools
     [McpServerTool, Description("Gets network information for the running Sandbox.")]
     public async Task<string> GetSandboxNetwork()
     {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return "Windows Sandbox CLI is not available on this system.";
+
         var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found. Please start a sandbox first.";
@@ -136,6 +219,9 @@ public sealed class WindowsSandboxTools
     [McpServerTool, Description("Checks if a Sandbox is currently running.")]
     public async Task<string> IsSandboxRunning()
     {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return "Windows Sandbox CLI is not available on this system.";
+
         var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
 
         if (string.IsNullOrEmpty(sandboxId))
