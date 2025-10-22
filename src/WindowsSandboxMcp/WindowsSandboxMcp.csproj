@@ -16,6 +16,7 @@
 		<Authors>Your Name</Authors>
 		<Description>A .NET tool to manage Windows Sandbox instances.</Description>
 		<PackageTags>windows-sandbox;sandbox;wsb</PackageTags>
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
 
 	</PropertyGroup>
 	<ItemGroup>
