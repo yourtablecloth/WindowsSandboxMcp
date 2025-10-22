@@ -44,6 +44,9 @@ internal static class WindowsSandboxCliRaw
 
     private static async Task<CliExecutionResult> ExecuteCliAsync(string wsbPath, IEnumerable<string> arguments, CancellationToken cancellationToken = default)
     {
+        if (!OperatingSystem.IsWindows())
+            throw new NotSupportedException("This MCP server is not supported on non-Windows operating systems.");
+
         var startInfo = new ProcessStartInfo(wsbPath, arguments)
         {
             RedirectStandardOutput = true,

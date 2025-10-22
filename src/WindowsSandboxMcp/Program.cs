@@ -4,6 +4,12 @@ using Microsoft.Extensions.Hosting;
 using System.Reflection;
 using WindowsSandboxMcp.Tools;
 
+if (!OperatingSystem.IsWindows())
+{
+    Console.Error.WriteLine("This MCP server is not supported on non-Windows operating systems.");
+    return 1;
+}
+
 // Start MCP stdio Server
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
@@ -34,3 +40,5 @@ try
     app.Run();
 }
 catch (OperationCanceledException) { }
+
+return 0;

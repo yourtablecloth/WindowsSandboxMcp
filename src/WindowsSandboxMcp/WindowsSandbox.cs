@@ -1,4 +1,5 @@
 using System.Management;
+using System.Runtime.Versioning;
 
 public static class WindowsSandbox
 {
@@ -117,6 +118,9 @@ public static class WindowsSandbox
 
     public static bool GetActiveSandboxRemoteSession(string sandboxId)
     {
+        if (!OperatingSystem.IsWindows())
+            throw new NotSupportedException("This MCP server is not supported on non-Windows operating systems.");
+
         try
         {
             string q = $"SELECT CommandLine FROM Win32_Process WHERE Name = 'WindowsSandboxRemoteSession.exe' AND CommandLine LIKE '%{sandboxId}%'";
