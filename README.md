@@ -1,6 +1,9 @@
-# Windows Sandbox MCP Server
+# Windows Sandbox MCP
 
-A Model Context Protocol (MCP) server that enables control of Windows Sandbox through MCP.
+[![Publish](https://github.com/yourtablecloth/WindowsSandboxMcp/actions/workflows/publish.yml/badge.svg)](https://github.com/yourtablecloth/WindowsSandboxMcp/actions/workflows/publish.yml)
+[![NuGet version](https://img.shields.io/nuget/v/WindowsSandboxMcp.svg)](https://www.nuget.org/packages/WindowsSandboxMcp/)
+
+A .NET tool to manage Windows Sandbox instances through the Model-View-Controller (MCP) protocol.
 
 [![Demo](https://img.youtube.com/vi/2cIWJsQDlSM/maxresdefault.jpg)](https://www.youtube.com/watch?v=2cIWJsQDlSM)
 
@@ -38,13 +41,31 @@ This MCP server can be used with any MCP-compatible client, including Claude Des
 dotnet build -c Release
 ```
 
-#### 2. Configure Claude Desktop
+#### 2. Configuration for AI Client
+
+##### 2.1. Claude Desktop
 
 Open the `claude_desktop_config.json` file located at:
 
 `%AppData%\Claude\claude_desktop_config.json`
 
-Configure it as follows:
+For everyday use, configure it as follows:
+
+```json
+{
+  "mcpServers": {
+    "windows-sandbox": {
+      "command": "dnx",
+      "args": [
+        "WindowsSandboxMcp",
+        "--yes",
+      ]
+    }
+  }
+}
+```
+
+For development, configure it as follows:
 
 ```json
 {
@@ -60,6 +81,41 @@ Configure it as follows:
   }
 }
 ```
+
+##### 2.2. Visual Studio Code
+
+Open VS Code settings (Ctrl+,) and search for "MCP" or edit your `settings.json` directly:
+
+For everyday use, configure it as follows:
+
+```json
+{
+  "servers": {
+    "windows-sandbox": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": ["WindowsSandboxMcp", "--yes"]
+    }
+  }
+}
+```
+
+For development, configure it as follows:
+
+```json
+{
+  "servers": {
+    "windows-sandbox": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": ["run", "--project", "D:\\projects\\WindowsSandboxMcp\\src\\WindowsSandboxMcp\\WindowsSandboxMcp.csproj"]
+    }
+  }
+}
+```
+
+You must use an absolute path. You can check the absolute path of the project using the `pwd` command in PowerShell.
+
 
 You must use an absolute path. You can check the absolute path of the project using the `pwd` command in PowerShell.
 
@@ -82,55 +138,7 @@ This MCP server provides programmatic control over Windows Sandbox through the f
 
 > **Note:** The available tools and their parameters may change as the project evolves. Use your MCP client's tool discovery features to see the current list of available tools and their specifications.
 
-### With VS Code
-
-#### 1. Install the MCP Extension
-
-Install the official MCP extension for VS Code from the marketplace:
-
-- Extension Name: **MCP Servers**
-- Extension ID: `modelcontextprotocol.vscode-mcp`
-
-Or search for "MCP" in the VS Code Extensions view (Ctrl+Shift+X).
-
-#### 2. Build the Project
-
-```bash
-dotnet build -c Release
-```
-
-#### 3. Configure MCP Settings
-
-Open VS Code settings (Ctrl+,) and search for "MCP" or edit your `settings.json` directly:
-
-```json
-{
-  "servers": {
-    "windows-sandbox": {
-      "type": "stdio",
-      "command": "dotnet",
-      "args": ["run", "--project", "D:\\projects\\WindowsSandboxMcp\\src\\WindowsSandboxMcp\\WindowsSandboxMcp.csproj"]
-    }
-  }
-}
-```
-
-You must use an absolute path. You can check the absolute path of the project using the `pwd` command in PowerShell.
-
-#### 4. Reload VS Code
-
-After saving the settings, reload VS Code (Ctrl+Shift+P → "Developer: Reload Window") or restart VS Code.
-
-#### 5. Use with GitHub Copilot Chat
-
-Once configured, you can use the Windows Sandbox tools in GitHub Copilot Chat by mentioning them:
-
-- Type `@workspace` in Copilot Chat to access workspace context
-- The MCP tools will be available for Copilot to use when helping you
-
-## Testing
-
-### Testing with Claude Desktop
+## Usage
 
 You can ask Claude Desktop questions like:
 
@@ -140,94 +148,6 @@ You can ask Claude Desktop questions like:
 - "Stop the sandbox"
 - "Add a shared folder to the sandbox"
 - "Is a sandbox currently running?"
-
-### Testing with VS Code (GitHub Copilot Chat)
-
-You can ask GitHub Copilot questions like:
-
-- "Can you start a Windows Sandbox for me?"
-- "Execute notepad.exe in the sandbox"
-- "What's the network configuration of the running sandbox?"
-- "Please stop the sandbox"
-- "Add C:\Temp as a shared folder in the sandbox"
-
-## Troubleshooting
-
-### General
-
-#### If `dotnet run --project` doesn't work or multiple clients can't connect simultaneously
-
-The `dotnet run --project` approach may have limitations when multiple MCP clients try to connect at the same time, as each client may trigger a separate build process.
-
-**Solution:** Build and use the executable directly
-
-1. Build the project in Release mode:
-
-   ```bash
-   dotnet publish -c Release -o ./publish
-   ```
-
-2. Update your MCP client configuration to use the executable directly:
-
-   **For Claude Desktop** (`claude_desktop_config.json`):
-
-   ```json
-   {
-     "mcpServers": {
-       "windows-sandbox": {
-         "command": "D:\\projects\\WindowsSandboxMcp\\publish\\WindowsSandboxMcp.exe"
-       }
-     }
-   }
-   ```
-
-   **For VS Code** (`settings.json`):
-
-   ```json
-   {
-     "mcp.servers": {
-       "windows-sandbox": {
-         "command": "D:\\projects\\WindowsSandboxMcp\\publish\\WindowsSandboxMcp.exe"
-       }
-     }
-   }
-   ```
-
-   Replace `D:\\projects\\WindowsSandboxMcp` with your actual project path.
-
-3. Restart your MCP client
-
-This approach allows multiple clients to use the same compiled executable without conflicts.
-
-### Claude Desktop
-
-#### If the server is not visible in Claude Desktop
-
-1. Verify the JSON syntax in `claude_desktop_config.json`
-2. Ensure the project path is absolute
-3. Completely close and restart Claude Desktop
-
-#### Viewing Claude Desktop Logs
-
-```powershell
-type %USERPROFILE%\AppData\Roaming\Claude\logs\mcp*.log
-```
-
-### VS Code
-
-#### If MCP tools are not available
-
-1. Verify the MCP extension is installed and enabled
-2. Check that the `settings.json` configuration is correct
-3. Ensure the project path is absolute
-4. Reload the VS Code window (Ctrl+Shift+P → "Developer: Reload Window")
-5. Check the VS Code Output panel (View → Output) and select "MCP" from the dropdown
-
-#### Viewing VS Code Logs
-
-1. Open VS Code Output panel (Ctrl+Shift+` or View → Output)
-2. Select "MCP" from the dropdown menu
-3. Look for connection and error messages
 
 ## Technical Details
 
