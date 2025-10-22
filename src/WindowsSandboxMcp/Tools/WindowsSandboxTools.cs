@@ -74,6 +74,30 @@ public sealed class WindowsSandboxTools
         return "Sandbox started successfully.";
     }
 
+    [McpServerTool, Description("Checks if the Sandbox remote session window is currently opened.")]
+    public async Task<bool> IsSandboxRemoteSessionWindowOpened()
+    {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return false;
+
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        if (string.IsNullOrEmpty(sandboxId))
+            return false;
+
+        return WindowsSandbox.GetActiveSandboxRemoteSession(sandboxId);
+    }
+
+    [McpServerTool, Description("Executes a web page (URL) in the running Sandbox using default browser.")]
+    public async Task<string> ExecuteWebPageInSandbox(
+        string url,
+        string runAs = "ExistingLogin",
+        string? workingDirectory = null)
+    {
+        var explorerPath = @"C:\Windows\Explorer.exe";
+        var command = $"\"{explorerPath}\" \"{url}\"";
+        return await ExecuteInSandbox(command, runAs, workingDirectory);
+    }
+
     [McpServerTool, Description("Executes a command in the running Sandbox.")]
     public async Task<string> ExecuteInSandbox(
         [Description("Command to execute")] string command,
