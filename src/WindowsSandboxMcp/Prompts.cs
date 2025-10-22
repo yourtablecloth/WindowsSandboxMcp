@@ -35,6 +35,7 @@ internal static class Prompts
         5. Session Management
         - Launch remote session windows to access sandbox interface
         - Automatic connection establishment and readiness detection
+        - Check if sandbox remote session window is currently opened
 
         6. Network Information
         - Retrieve IP addresses and network configuration of active sandbox
@@ -53,6 +54,7 @@ internal static class Prompts
         OPERATIONAL GUIDELINES:
         - Always verify if a sandbox is active before initializing a new instance
         - Wait for sandbox readiness confirmation before executing commands
+        - Before opening a sandbox remote session window, check if the window is already opened to avoid unnecessary operations
         - The server automatically manages sandbox connections and sessions
         - Directory paths must be absolute paths on the host system
         - Multiple directories can be mapped using comma-separated paths when initializing sandbox
@@ -70,6 +72,7 @@ internal static class Prompts
         2. Initialize a sandbox with desired configuration (if none is active)
         3. Wait for sandbox readiness confirmation (handled automatically)
         4. Execute commands or add shared directories as needed
-        5. Terminate the sandbox when operations are complete
+        5. When opening sandbox remote session window, first check if it's already opened
+        6. Terminate the sandbox when operations are complete
         """;
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using WindowsSandboxMcp;
 
 internal static class WindowsSandboxCliRaw
 {
@@ -41,7 +42,37 @@ internal static class WindowsSandboxCliRaw
         return JsonDocument.Parse(rawOutput);
     }
 
-    public static async Task<JsonDocument> StartSandboxRawAsync(WindowsSandboxConfiguration? config = default, CancellationToken cancellationToken = default)
+    private static async Task<CliExecutionResult> ExecuteCliAsync(string wsbPath, IEnumerable<string> arguments, CancellationToken cancellationToken = default)
+    {
+        var startInfo = new ProcessStartInfo(wsbPath, arguments)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            LoadUserProfile = true,
+            UseShellExecute = false,
+        };
+
+        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
+        process.Start();
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        var output = await outputTask.ConfigureAwait(false);
+        var error = await errorTask.ConfigureAwait(false);
+
+        return new CliExecutionResult
+        {
+            OutputDocument = ToJsonDocument(output),
+            StandardError = string.IsNullOrWhiteSpace(error) ? null : error.Trim(),
+            ExitCode = process.ExitCode
+        };
+    }
+
+    public static async Task<CliExecutionResult> StartSandboxRawAsync(WindowsSandboxConfiguration? config = default, CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
         var argList = new List<string>() { "StartSandbox", "--raw", };
@@ -49,40 +80,16 @@ internal static class WindowsSandboxCliRaw
         if (!string.IsNullOrWhiteSpace(configXml))
             argList.AddRange(["--config", configXml]);
 
-        var startInfo = new ProcessStartInfo(wsbPath, argList)
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, argList, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<JsonDocument> ConnectToSandboxRawAsync(string sandboxId, CancellationToken cancellationToken = default)
+    public static async Task<CliExecutionResult> ConnectToSandboxRawAsync(string sandboxId, CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
-        var startInfo = new ProcessStartInfo(wsbPath, ["ConnectToSandbox", "--id", sandboxId, "--raw"])
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, ["ConnectToSandbox", "--id", sandboxId, "--raw"], cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<JsonDocument> ExecuteInSandboxRawAsync(string sandboxId, string commandToRunInSandbox, SandboxRunningContext runAs, string? workingDirectoryInSandbox = default, CancellationToken cancellationToken = default)
+    public static async Task<CliExecutionResult> ExecuteInSandboxRawAsync(string sandboxId, string commandToRunInSandbox, SandboxRunningContext runAs, string? workingDirectoryInSandbox = default, CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
         var runAsOption = runAs switch
@@ -96,40 +103,16 @@ internal static class WindowsSandboxCliRaw
         if (workingDirectoryInSandbox != null)
             argList.AddRange(["--working-directory", workingDirectoryInSandbox]);
 
-        var startInfo = new ProcessStartInfo(wsbPath, argList)
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, argList, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<JsonDocument> StopSandboxRawAsync(string sandboxId, CancellationToken cancellationToken = default)
+    public static async Task<CliExecutionResult> StopSandboxRawAsync(string sandboxId, CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
-        var startInfo = new ProcessStartInfo(wsbPath, ["StopSandbox", "--id", sandboxId, "--raw"])
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, ["StopSandbox", "--id", sandboxId, "--raw"], cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<JsonDocument> AddSharedFolderRawAsync(string sandboxId, string hostDirectoryPath, string? sandboxAbsolutePath = default, bool? allowWrite = default, CancellationToken cancellationToken = default)
+    public static async Task<CliExecutionResult> AddSharedFolderRawAsync(string sandboxId, string hostDirectoryPath, string? sandboxAbsolutePath = default, bool? allowWrite = default, CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
         var argList = new List<string> { "ShareFolder", "--id", sandboxId, "--raw", "--host-path", hostDirectoryPath, };
@@ -138,54 +121,18 @@ internal static class WindowsSandboxCliRaw
         if (allowWrite == true)
             argList.Add("--allow-write");
 
-        var startInfo = new ProcessStartInfo(wsbPath, argList)
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, argList, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<JsonDocument> GetSandboxNetworkRawAsync(string sandboxId, CancellationToken cancellationToken = default)
+    public static async Task<CliExecutionResult> GetSandboxNetworkRawAsync(string sandboxId, CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
-        var startInfo = new ProcessStartInfo(wsbPath, ["GetIpAddress", "--id", sandboxId, "--raw"])
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, ["GetIpAddress", "--id", sandboxId, "--raw"], cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<JsonDocument> GetRunningSandboxesRawAsync(CancellationToken cancellationToken = default)
+    public static async Task<CliExecutionResult> GetRunningSandboxesRawAsync(CancellationToken cancellationToken = default)
     {
         var wsbPath = EnsureSandboxCliAvailability();
-        var startInfo = new ProcessStartInfo(wsbPath, ["ListRunningSandboxes", "--raw"])
-        {
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            LoadUserProfile = true,
-            UseShellExecute = false,
-        };
-        using var process = new Process() { StartInfo = startInfo, EnableRaisingEvents = true, };
-        process.Start();
-
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var content = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return ToJsonDocument(content);
+        return await ExecuteCliAsync(wsbPath, ["ListRunningSandboxes", "--raw"], cancellationToken).ConfigureAwait(false);
     }
 }

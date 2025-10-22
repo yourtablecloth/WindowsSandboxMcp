@@ -1,7 +1,5 @@
 using ModelContextProtocol.Server;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.Xml.Linq;
 
 namespace WindowsSandboxMcp.Tools;
 
@@ -53,49 +51,22 @@ public sealed class WindowsSandboxTools
         }
 
         if (!WindowsSandbox.CanUseSandboxCli())
-        {
-            // Fallback: Generate temporary WSB file and launch it via Process.Start
-            return await WindowsSandbox.StartSandboxViaWsbFileAsync(config);
-        }
+            return "Windows Sandbox CLI is not available on this system.";
 
         // Check if a sandbox is already running
-        var existingSandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        var existingSandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existingSandboxId))
             return "A sandbox is already running. Please stop the existing sandbox before starting a new one.";
 
-        var sandboxId = await WindowsSandbox.StartSandboxAsync(config);
+        var (sandboxId, error) = await WindowsSandbox.StartSandboxAsync(config).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(error))
+            return $"Failed to start sandbox: {error}";
 
         if (string.IsNullOrEmpty(sandboxId))
             return "Failed to start sandbox.";
 
-        _ = WindowsSandbox.ConnectToSandboxAsync(sandboxId);
-        await WindowsSandbox.WaitUntilSandboxReadyAsync(sandboxId, TimeSpan.FromSeconds(1d));
-
         return "Sandbox started successfully.";
-    }
-
-    [McpServerTool, Description("Checks if the Sandbox remote session window is currently opened.")]
-    public async Task<bool> IsSandboxRemoteSessionWindowOpened()
-    {
-        if (!WindowsSandbox.CanUseSandboxCli())
-            return false;
-
-        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
-        if (string.IsNullOrEmpty(sandboxId))
-            return false;
-
-        return WindowsSandbox.GetActiveSandboxRemoteSession(sandboxId);
-    }
-
-    [McpServerTool, Description("Executes a web page (URL) in the running Sandbox using default browser.")]
-    public async Task<string> ExecuteWebPageInSandbox(
-        string url,
-        string runAs = "ExistingLogin",
-        string? workingDirectory = null)
-    {
-        var explorerPath = @"C:\Windows\Explorer.exe";
-        var command = $"\"{explorerPath}\" \"{url}\"";
-        return await ExecuteInSandbox(command, runAs, workingDirectory);
     }
 
     [McpServerTool, Description("Executes a command in the running Sandbox.")]
@@ -109,23 +80,22 @@ public sealed class WindowsSandboxTools
             if (!WindowsSandbox.CanUseSandboxCli())
                 return "Windows Sandbox CLI is not available on this system.";
 
-            var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+            var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
             if (string.IsNullOrEmpty(sandboxId))
                 return "No running sandbox found. Please start a sandbox first.";
 
             if (!WindowsSandbox.GetActiveSandboxRemoteSession(sandboxId))
             {
-                _ = WindowsSandbox.ConnectToSandboxAsync(sandboxId);
-                await WindowsSandbox.WaitUntilSandboxReadyAsync(sandboxId, TimeSpan.FromSeconds(1d));
+                _ = WindowsSandbox.ConnectToSandboxAsync(sandboxId).ConfigureAwait(false);
+                await WindowsSandbox.WaitUntilSandboxReadyAsync(sandboxId, TimeSpan.FromSeconds(1d)).ConfigureAwait(false);
             }
 
             var runAsContext = runAs.Equals("System", StringComparison.OrdinalIgnoreCase)
                 ? SandboxRunningContext.System
                 : SandboxRunningContext.ExistingLogin;
 
-            _ = WindowsSandbox.ExecuteInSandboxAsync(sandboxId, command, runAsContext, workingDirectory);
-
-            return "Command executed in sandbox successfully.";
+            _ = WindowsSandbox.ExecuteInSandboxAsync(sandboxId, $"cmd.exe /c start {command}", runAsContext, workingDirectory).ConfigureAwait(false);
+            return "Command execution request sent in sandbox.";
         }
         catch (Exception ex)
         {
@@ -139,11 +109,15 @@ public sealed class WindowsSandboxTools
         if (!WindowsSandbox.CanUseSandboxCli())
             return "Windows Sandbox CLI is not available on this system.";
 
-        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found.";
 
-        await WindowsSandbox.StopSandboxAsync(sandboxId);
+        var error = await WindowsSandbox.StopSandboxAsync(sandboxId).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(error))
+            return $"Failed to stop sandbox: {error}";
+
         return "Sandbox stopped successfully.";
     }
 
@@ -156,11 +130,15 @@ public sealed class WindowsSandboxTools
         if (!WindowsSandbox.CanUseSandboxCli())
             return "Windows Sandbox CLI is not available on this system.";
 
-        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found. Please start a sandbox first.";
 
-        await WindowsSandbox.AddSharedFolderAsync(sandboxId, hostDirectoryPath, sandboxAbsolutePath, allowWrite);
+        var error = await WindowsSandbox.AddSharedFolderAsync(sandboxId, hostDirectoryPath, sandboxAbsolutePath, allowWrite).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(error))
+            return $"Failed to add shared folder: {error}";
+
         return $"Shared folder added to sandbox: {hostDirectoryPath}";
     }
 
@@ -170,11 +148,11 @@ public sealed class WindowsSandboxTools
         if (!WindowsSandbox.CanUseSandboxCli())
             return "Windows Sandbox CLI is not available on this system.";
 
-        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found. Please start a sandbox first.";
 
-        await WindowsSandbox.ConnectToSandboxAsync(sandboxId);
+        _ = WindowsSandbox.ConnectToSandboxAsync(sandboxId).ConfigureAwait(false);
         return "Sandbox remote session window opened.";
     }
 
@@ -184,17 +162,19 @@ public sealed class WindowsSandboxTools
         if (!WindowsSandbox.CanUseSandboxCli())
             return "Windows Sandbox CLI is not available on this system.";
 
-        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
         if (string.IsNullOrEmpty(sandboxId))
             return "No running sandbox found. Please start a sandbox first.";
 
-        var networks = await WindowsSandbox.GetSandboxNetworkAsync(sandboxId);
+        var (networks, error) = await WindowsSandbox.GetSandboxNetworkAsync(sandboxId).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(error))
+            return $"Failed to get network information: {error}";
 
         if (!networks.Any())
             return "No network information found for the sandbox.";
 
-        var result = string.Join("\n", networks.Select(n =>
-            $"IPv4: {n.IPv4Address}"));
+        var result = string.Join("\n", networks.Select(n => $"IPv4: {n.IPv4Address}"));
 
         return $"Network information:\n{result}";
     }
@@ -205,11 +185,25 @@ public sealed class WindowsSandboxTools
         if (!WindowsSandbox.CanUseSandboxCli())
             return "Windows Sandbox CLI is not available on this system.";
 
-        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync();
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(sandboxId))
             return "No sandbox is currently running.";
 
         return "A sandbox is currently running.";
+    }
+
+    [McpServerTool, Description("Checks if the Sandbox remote session window is currently opened.")]
+    public async Task<string> IsRemoteSessionWindowOpened()
+    {
+        if (!WindowsSandbox.CanUseSandboxCli())
+            return "Windows Sandbox CLI is not available on this system.";
+
+        var sandboxId = await WindowsSandbox.GetSingleSandboxIdAsync().ConfigureAwait(false);
+        if (string.IsNullOrEmpty(sandboxId))
+            return "No running sandbox found. Please start a sandbox first.";
+
+        var isOpened = WindowsSandbox.GetActiveSandboxRemoteSession(sandboxId);
+        return isOpened ? "The sandbox remote session window is currently opened." : "The sandbox remote session window is not opened.";
     }
 }

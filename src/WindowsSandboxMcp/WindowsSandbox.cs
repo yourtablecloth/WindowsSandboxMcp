@@ -7,65 +7,24 @@ public static class WindowsSandbox
     public static bool CanUseSandboxCli()
         => WindowsSandboxCliRaw.IsSupportedOSForSandboxCli();
 
-    public static async Task<string> StartSandboxViaWsbFileAsync(WindowsSandboxConfiguration config)
+    public static async Task<(string? SandboxId, string? Error)> StartSandboxAsync(WindowsSandboxConfiguration? config = default, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            // Generate XML document with proper declaration
-            var xDocument = new XDocument(
-                new XDeclaration("1.0", "utf-8", null),
-                config.ToXmlElement()
-            );
+        var result = await WindowsSandboxCliRaw.StartSandboxRawAsync(config, cancellationToken).ConfigureAwait(false);
 
-            // Create temporary WSB file
-            var tempWsbPath = Path.Combine(Path.GetTempPath(), $"sandbox_{Guid.NewGuid():N}.wsb");
+        if (result.HasError)
+            return (null, result.GetErrorMessage());
 
-            // Save XML to WSB file
-            await using (var fileStream = new FileStream(tempWsbPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            await using (var streamWriter = new StreamWriter(fileStream, System.Text.Encoding.UTF8))
-            {
-                await streamWriter.WriteAsync(xDocument.ToString());
-            }
+        if (result.OutputDocument.RootElement.TryGetProperty("Id", out var idElem))
+            return (idElem.GetString(), null);
 
-            // Launch WSB file using shell execution
-            var processStartInfo = new ProcessStartInfo
-            {
-                FileName = tempWsbPath,
-                UseShellExecute = true,
-                Verb = "open"
-            };
-
-            var process = Process.Start(processStartInfo);
-
-            if (process == null)
-            {
-                // Clean up temp file if process failed to start
-                try { File.Delete(tempWsbPath); } catch { }
-                return "Failed to start sandbox via WSB file.";
-            }
-
-            // Note: The WSB file will be automatically cleaned up by the temp folder cleanup mechanism
-            // We don't delete it immediately as Windows Sandbox might still be reading it
-            return $"Sandbox started successfully via WSB file. Note: Advanced features (execute commands, network info, etc.) are not available without Windows Sandbox CLI.";
-        }
-        catch (Exception ex)
-        {
-            return $"Error starting sandbox via WSB file: {ex.Message}";
-        }
+        return (null, null);
     }
 
-    public static async Task<string?> StartSandboxAsync(WindowsSandboxConfiguration? config = default, CancellationToken cancellationToken = default)
+    public static async Task<string?> ConnectToSandboxAsync(string sandboxId, CancellationToken cancellationToken = default)
     {
-        var doc = await WindowsSandboxCliRaw.StartSandboxRawAsync(config, cancellationToken).ConfigureAwait(false);
-
-        if (doc.RootElement.TryGetProperty("Id", out var idElem))
-            return idElem.GetString();
-
-        return default;
+        var result = await WindowsSandboxCliRaw.ConnectToSandboxRawAsync(sandboxId, cancellationToken).ConfigureAwait(false);
+        return result.HasError ? result.GetErrorMessage() : null;
     }
-
-    public static Task ConnectToSandboxAsync(string sandboxId, CancellationToken cancellationToken = default)
-        => WindowsSandboxCliRaw.ConnectToSandboxRawAsync(sandboxId, cancellationToken);
 
     public static async Task WaitUntilSandboxReadyAsync(string sandboxId, TimeSpan extraTimeSpan = default, CancellationToken cancellationToken = default)
     {
@@ -77,30 +36,48 @@ public static class WindowsSandbox
     }
 
     public static async Task<bool> IsSandboxLoggedInAsync(string sandboxId, CancellationToken cancellationToken = default)
-        => (await ExecuteInSandboxAsync(sandboxId, "C:\\Windows\\System32\\cmd.exe /c ver", SandboxRunningContext.ExistingLogin, cancellationToken: cancellationToken).ConfigureAwait(false)).HasValue;
-
-    public static async Task<int?> ExecuteInSandboxAsync(string sandboxId, string commandToRunInSandbox, SandboxRunningContext runAs, string? workingDirectoryInSandbox = default, CancellationToken cancellationToken = default)
     {
-        var doc = await WindowsSandboxCliRaw.ExecuteInSandboxRawAsync(sandboxId, commandToRunInSandbox, runAs, workingDirectoryInSandbox, cancellationToken).ConfigureAwait(false);
-
-        if (doc.RootElement.TryGetProperty("ExitCode", out var exitCodeElem))
-            return exitCodeElem.TryGetInt32(out var exitCodeValue) ? exitCodeValue : default;
-
-        return default;
+        var (exitCode, error) = await ExecuteInSandboxAsync(sandboxId, "C:\\Windows\\System32\\cmd.exe /c ver", SandboxRunningContext.ExistingLogin, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return exitCode.HasValue;
     }
 
-    public static Task StopSandboxAsync(string sandboxId, CancellationToken cancellationToken = default)
-        => WindowsSandboxCliRaw.StopSandboxRawAsync(sandboxId, cancellationToken);
+    public static async Task<(int? ExitCode, string? Error)> ExecuteInSandboxAsync(string sandboxId, string commandToRunInSandbox, SandboxRunningContext runAs, string? workingDirectoryInSandbox = default, CancellationToken cancellationToken = default)
+    {
+        var result = await WindowsSandboxCliRaw.ExecuteInSandboxRawAsync(sandboxId, commandToRunInSandbox, runAs, workingDirectoryInSandbox, cancellationToken).ConfigureAwait(false);
 
-    public static Task AddSharedFolderAsync(string sandboxId, string hostDirectoryPath, string? sandboxAbsolutePath = default, bool? allowWrite = default, CancellationToken cancellationToken = default)
-        => WindowsSandboxCliRaw.AddSharedFolderRawAsync(sandboxId, hostDirectoryPath, sandboxAbsolutePath, allowWrite, cancellationToken);
+        if (result.HasError)
+            return (null, result.GetErrorMessage());
 
-    public static async Task<IEnumerable<WindowsSandboxNetwork>> GetSandboxNetworkAsync(string sandboxId, CancellationToken cancellationToken = default)
+        if (result.OutputDocument.RootElement.TryGetProperty("ExitCode", out var exitCodeElem))
+        {
+            var exitCode = exitCodeElem.TryGetInt32(out var exitCodeValue) ? exitCodeValue : default(int?);
+            return (exitCode, null);
+        }
+
+        return (null, null);
+    }
+
+    public static async Task<string?> StopSandboxAsync(string sandboxId, CancellationToken cancellationToken = default)
+    {
+        var result = await WindowsSandboxCliRaw.StopSandboxRawAsync(sandboxId, cancellationToken).ConfigureAwait(false);
+        return result.HasError ? result.GetErrorMessage() : null;
+    }
+
+    public static async Task<string?> AddSharedFolderAsync(string sandboxId, string hostDirectoryPath, string? sandboxAbsolutePath = default, bool? allowWrite = default, CancellationToken cancellationToken = default)
+    {
+        var result = await WindowsSandboxCliRaw.AddSharedFolderRawAsync(sandboxId, hostDirectoryPath, sandboxAbsolutePath, allowWrite, cancellationToken).ConfigureAwait(false);
+        return result.HasError ? result.GetErrorMessage() : null;
+    }
+
+    public static async Task<(IEnumerable<WindowsSandboxNetwork> Networks, string? Error)> GetSandboxNetworkAsync(string sandboxId, CancellationToken cancellationToken = default)
     {
         var list = new List<WindowsSandboxNetwork>();
-        var doc = await WindowsSandboxCliRaw.GetSandboxNetworkRawAsync(sandboxId, cancellationToken).ConfigureAwait(false);
+        var result = await WindowsSandboxCliRaw.GetSandboxNetworkRawAsync(sandboxId, cancellationToken).ConfigureAwait(false);
 
-        foreach (var eachEnv in doc.RootElement.GetProperty("Networks").EnumerateArray())
+        if (result.HasError)
+            return (list.AsReadOnly(), result.GetErrorMessage());
+
+        foreach (var eachEnv in result.OutputDocument.RootElement.GetProperty("Networks").EnumerateArray())
         {
             var ipv4Address = eachEnv.GetProperty("IpV4Address").GetString();
             if (ipv4Address == null)
@@ -108,15 +85,18 @@ public static class WindowsSandbox
             list.Add(new WindowsSandboxNetwork { SandboxId = sandboxId, IPv4Address = ipv4Address, });
         }
 
-        return list.AsReadOnly();
+        return (list.AsReadOnly(), null);
     }
 
-    public static async Task<IEnumerable<string>> GetRunningSandboxIdsAsync(CancellationToken cancellationToken = default)
+    public static async Task<(IEnumerable<string> SandboxIds, string? Error)> GetRunningSandboxIdsAsync(CancellationToken cancellationToken = default)
     {
         var list = new List<string>();
-        var doc = await WindowsSandboxCliRaw.GetRunningSandboxesRawAsync();
+        var result = await WindowsSandboxCliRaw.GetRunningSandboxesRawAsync(cancellationToken).ConfigureAwait(false);
 
-        foreach (var eachEnv in doc.RootElement.GetProperty("WindowsSandboxEnvironments").EnumerateArray())
+        if (result.HasError)
+            return (list.AsReadOnly(), result.GetErrorMessage());
+
+        foreach (var eachEnv in result.OutputDocument.RootElement.GetProperty("WindowsSandboxEnvironments").EnumerateArray())
         {
             var id = eachEnv.GetProperty("Id").GetString();
             if (id == null)
@@ -124,12 +104,12 @@ public static class WindowsSandbox
             list.Add(id);
         }
 
-        return list.AsReadOnly();
+        return (list.AsReadOnly(), null);
     }
 
     public static async Task<string?> GetSingleSandboxIdAsync(CancellationToken cancellationToken = default)
     {
-        var sandboxIds = await WindowsSandbox.GetRunningSandboxIdsAsync(cancellationToken).ConfigureAwait(false);
+        var (sandboxIds, error) = await WindowsSandbox.GetRunningSandboxIdsAsync(cancellationToken).ConfigureAwait(false);
 
         if (sandboxIds.Count() == 1)
             return sandboxIds.First();
