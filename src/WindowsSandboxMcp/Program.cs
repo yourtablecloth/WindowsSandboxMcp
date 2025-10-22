@@ -1,32 +1,36 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using ModelContextProtocol;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Reflection;
 using WindowsSandboxMcp.Tools;
 
 // MCP stdio 서버 시작
-var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (s, e) => { e.Cancel = true; cts.Cancel(); };
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
 try
 {
-    await RunMcpServerAsync(cts.Token);
-}
-catch (OperationCanceledException)
-{
-    // 정상 종료
-}
-
-static async Task RunMcpServerAsync(CancellationToken cancellationToken)
-{
     var builder = Host.CreateEmptyApplicationBuilder(settings: null);
+    builder.Configuration.AddCommandLine(args);
+    builder.Configuration.AddEnvironmentVariables();
 
-    builder.Services.AddMcpServer()
+    builder.Services.AddMcpServer(o =>
+        {
+            if (o.ServerInfo != null)
+            {
+                o.ServerInfo.Name = "windows-sandbox-mcp";
+                o.ServerInfo.Version = Assembly.GetExecutingAssembly()
+                    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                    ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+                    ?? "0.0.1";
+            }
+
+            o.ServerInstructions = Prompts.McpServerPrompt;            
+        })
         .WithStdioServerTransport()
         .WithTools(new WindowsSandboxTools());
 
-    var app = builder.Build();
-
-    await app.RunAsync();
+    using var app = builder.Build();
+    app.Run();
 }
+catch (OperationCanceledException) { }
