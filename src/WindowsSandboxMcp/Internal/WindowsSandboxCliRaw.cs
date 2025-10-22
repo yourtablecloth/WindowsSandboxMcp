@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
-using WindowsSandboxMcp;
+using WindowsSandboxMcp.Models;
 
 internal static class WindowsSandboxCliRaw
 {

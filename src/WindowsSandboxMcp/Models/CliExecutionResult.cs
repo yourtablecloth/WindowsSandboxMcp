@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace WindowsSandboxMcp;
+namespace WindowsSandboxMcp.Models;
 
 internal sealed class CliExecutionResult
 {

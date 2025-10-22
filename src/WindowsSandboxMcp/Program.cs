@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using System.Reflection;
 using WindowsSandboxMcp.Tools;
 
-// MCP stdio 서버 시작
+// Start MCP stdio Server
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
