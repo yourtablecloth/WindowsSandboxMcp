@@ -1,0 +1,31 @@
+name: Publish to NuGet
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    name: build, pack & publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x' # Adjust if your target framework changes
+
+      - name: Restore dependencies
+        run: dotnet restore src/WindowsSandboxMcp/WindowsSandboxMcp.csproj
+
+      - name: Build
+        run: dotnet build src/WindowsSandboxMcp/WindowsSandboxMcp.csproj --configuration Release --no-restore
+
+      - name: Pack
+        run: dotnet pack src/WindowsSandboxMcp/WindowsSandboxMcp.csproj --configuration Release --no-build -o ../../nupkg
+
+      - name: Publish to NuGet
+        run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json"
